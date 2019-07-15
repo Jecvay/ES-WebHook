@@ -1,0 +1,29 @@
+plugins {
+    id 'org.spongepowered.plugin' version '0.9.0'
+}
+
+compileJava.options.encoding = 'UTF-8'
+
+group = pluginGroup
+version = pluginVersion
+
+configurations {
+    // configuration that holds jars to include in the jar
+    extraLibs
+}
+
+
+dependencies {
+    compile 'org.spongepowered:spongeapi:7.1.0'
+    extraLibs group: 'com.alibaba', name: 'fastjson', version: '1.2.58'
+    configurations.compile.extendsFrom(configurations.extraLibs)
+}
+
+
+jar {
+    from {
+        configurations.extraLibs.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+sponge.plugin.id = pluginId
