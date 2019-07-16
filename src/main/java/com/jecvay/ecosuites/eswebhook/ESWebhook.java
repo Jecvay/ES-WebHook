@@ -23,20 +23,24 @@ public class ESWebhook {
     @Inject
     private Logger logger;
 
+    private ApiServer apiServer = null;
+
     @Listener
     public void onServerStart(GameStartedServerEvent event) {
-        NetUtils.logger = logger;
-        logger.info("-------Start-------->" + NetUtils.sendServerStartMsg());
+        ApiClient.logger = logger;
+        apiServer = ApiServer.getServer();
+        logger.info("-------Start-------->" + ApiClient.sendServerStartMsg());
     }
 
     @Listener
     public void onServerReload(GameReloadEvent event) {
-        // NetUtils.sendServerReloadMsg();
-        logger.info("-------Reload-------->" + NetUtils.sendServerReloadMsg());
+        // ApiClient.sendServerReloadMsg();
+        apiServer = ApiServer.getServer();
+        logger.info("-------Reload-------->" + ApiClient.sendServerReloadMsg() + apiServer.toString());
     }
 
     @Listener
     public void onChat(MessageChannelEvent.Chat e, @First Player p) {
-        NetUtils.sendChat(p.getName(), e.getMessage().toPlain());
+        ApiClient.sendChat(p.getName(), e.getMessage().toPlain());
     }
 }

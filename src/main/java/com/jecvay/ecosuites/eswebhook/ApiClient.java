@@ -8,15 +8,14 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.sql.Timestamp;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import org.slf4j.Logger;
 
-class ThreadPost extends Thread {
+class PostThread extends Thread {
     private String targetURL;
     private String urlParameters;
 
-    public ThreadPost(String targetURL, String urlParameters) {
+    public PostThread(String targetURL, String urlParameters) {
         this.targetURL = targetURL;
         this.urlParameters = urlParameters;
     }
@@ -71,7 +70,7 @@ class ThreadPost extends Thread {
     }
 }
 
-public class NetUtils {
+public class ApiClient {
 
     final static String CQURL = "http://jecvay.com:30004";
 
@@ -79,7 +78,7 @@ public class NetUtils {
 
     // 底层不要直接调
     private static String executePost(String targetURL, String urlParameters) {
-        Thread postThread = new ThreadPost(targetURL, urlParameters);
+        Thread postThread = new PostThread(targetURL, urlParameters);
         postThread.setDaemon(true);
         postThread.start();
         return "Thread sent";
