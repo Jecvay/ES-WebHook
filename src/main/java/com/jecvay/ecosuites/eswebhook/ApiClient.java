@@ -7,9 +7,12 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.sql.Timestamp;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.alibaba.fastjson.JSONObject;
 import org.slf4j.Logger;
+import org.spongepowered.api.util.Tuple;
 
 class PostThread extends Thread {
     private String targetURL;
@@ -70,7 +73,55 @@ class PostThread extends Thread {
     }
 }
 
+class FakeQueue extends Thread {
+    private Thread running = null;
+    static private FakeQueue fakeQueue = null;
+    private Queue<Tuple<String, String>> postQueue = null;
+
+    private FakeQueue() { }
+
+    static public FakeQueue getInstance() {
+        if (fakeQueue == null) {
+            fakeQueue = new FakeQueue();
+            fakeQueue.running = null;
+            fakeQueue.postQueue = new ConcurrentLinkedQueue<>();
+            fakeQueue.start();
+        }
+        return fakeQueue;
+    }
+
+    public void newPost(String url, String para) {
+        postQueue.add(new Tuple<>(url ,para));
+    }
+
+    public void run() {
+
+        // 轮询 任务 & 队列
+        while (true) {
+            try {
+                if (running != null && running.isAlive()) {
+                    sleep(50);
+                    continue;
+                }
+                Tuple data = postQueue.poll();
+                if (data == null) {
+                    sleep(500);
+                    continue;
+                }
+
+                running = new PostThread(data.getFirst().toString(), data.getSecond().toString());
+                running.setDaemon(true);
+                running.start();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
 public class ApiClient {
+    // 这里的方法, 都有可能是主线程调过来, 不要阻塞
 
     final static String CQURL = "http://jecvay.com:30004";
 
@@ -78,9 +129,12 @@ public class ApiClient {
 
     // 底层不要直接调
     private static String executePost(String targetURL, String urlParameters) {
+        /*
         Thread postThread = new PostThread(targetURL, urlParameters);
         postThread.setDaemon(true);
         postThread.start();
+        */
+        FakeQueue.getInstance().newPost(targetURL, urlParameters);
         return "Thread sent";
     }
 
@@ -91,7 +145,7 @@ public class ApiClient {
         json.put("post_type", "message");
         json.put("data", jsonData);
         String jsonString = json.toJSONString();
-        logger.info("Send Sponge Data! " + jsonString);
+        // logger.info("Send Sponge Data! " + jsonString);
         return executePost(CQURL, jsonString);
     }
 
@@ -111,12 +165,42 @@ public class ApiClient {
         return sendMessage(json);
     }
 
+    // 发送服务器状态信息
+    public static String sendServerStatus(JSONObject jsonData) {
+        JSONObject json = new JSONObject();
+        json.put("action", "status");
+        json.put("time", timeNow());
+        json.put("status", jsonData);
+        return sendMessage(json);
+    }
+
     // 有人说话
     public static String sendChat(String playerName, String message) {
         JSONObject json = new JSONObject();
         json.put("action", "chat");
         json.put("time", timeNow());
         json.put("player", playerName);
+        json.put("content", message);
+        return sendMessage(json);
+    }
+
+    // 有人死了
+    public static String sendDeath(String playerName, String killerName) {
+        JSONObject json = new JSONObject();
+        json.put("action", "death");
+        json.put("time", timeNow());
+        json.put("player", playerName);
+        if (killerName.length() > 0) {
+            json.put("killer", killerName);
+        }
+        return sendMessage(json);
+    }
+
+    // 执行cmd命令返回结果
+    public static String sendCmdResult(String message) {
+        JSONObject json = new JSONObject();
+        json.put("action", "cmd_result");
+        json.put("time", timeNow());
         json.put("content", message);
         return sendMessage(json);
     }

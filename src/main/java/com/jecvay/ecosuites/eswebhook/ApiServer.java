@@ -1,10 +1,13 @@
 package com.jecvay.ecosuites.eswebhook;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.TypeReference;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpServer;
 import org.spongepowered.api.Sponge;
+import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.scheduler.SpongeExecutorService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MessageChannel;
@@ -13,6 +16,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -56,9 +62,7 @@ public class ApiServer {
                     he.close();
                 }
             });
-            System.out.println("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
             server.start();
-            System.out.println("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -94,23 +98,62 @@ public class ApiServer {
         });
     }
 
+    private void runCommand(String cmd) {
+        minecraftExecutor.submit(() -> {
+           try {
+               Sponge.getCommandManager().process(CmdSource.getInstance(), cmd);
+           } catch (Exception e) {
+               e.printStackTrace();
+           }
+        });
+    }
+
+    private void sendServerStatus() {
+        minecraftExecutor.submit(() -> {
+            JSONObject json = new JSONObject();
+            Collection<Player> playerList = Sponge.getServer().getOnlinePlayers();
+            List<String> playerNameList = new ArrayList<>();
+            playerList.forEach(player -> {
+                playerNameList.add(player.getName());
+            });
+            json.put("players", playerNameList);
+            json.put("online", playerNameList.size());
+            ApiClient.sendServerStatus(json);
+        });
+    }
+
     private void onReceive(String receiveText) {
 
         try {
-            // List<Map<String, Object>> justMap = JSON.parseObject(receiveText, new TypeReference<List<Map<String, Object>>>(){});
 
             Map<String, Object> data = parseToMap(receiveText, String.class, Object.class);
             String action = data.getOrDefault("action", "unknown").toString();
-            if (action.equals("chat")) {
-                String content = data.getOrDefault("content", "").toString();
-                String name = data.getOrDefault("name", "").toString();
-                if (content.length() > 0 && name.length() > 0) {
-                    sendToAll(String.format("[qq: %s] %s", name, content));
-                } else {
-                    sendToConsole(String.format("[Unknown Coolq Chat] %s", receiveText));
+            switch (action) {
+                case "chat": {        // QQ -> MC 聊天
+                    String content = data.getOrDefault("content", "").toString();
+                    String name = data.getOrDefault("name", "").toString();
+                    if (content.length() > 0 && name.length() > 0) {
+                        sendToAll(String.format("[qq: %s] %s", name, content));
+                    } else {
+                        sendToConsole(String.format("[Unknown Coolq Chat] %s", receiveText));
+                    }
+                    break;
                 }
-            } else {
-                sendToConsole(String.format("[Unknown Coolq Data] %s", receiveText));
+                case "cmd": {      // 使用 MC 指令
+                    String content = data.getOrDefault("content", "").toString();
+                    if (content.length() == 0) {
+                        sendToConsole(String.format("[MC指令错误] %s", receiveText));
+                        break;
+                    }
+                    runCommand(content);
+                    break;
+                }
+                case "status":        // 查询服务器信息
+                    sendServerStatus();
+                    break;
+                default:
+                    sendToConsole(String.format("[Unknown Coolq Data] %s", receiveText));
+                    break;
             }
 
         } catch (Exception e) {
