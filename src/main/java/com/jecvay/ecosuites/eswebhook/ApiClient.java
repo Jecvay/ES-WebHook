@@ -90,7 +90,7 @@ class FakeQueue extends Thread {
         return fakeQueue;
     }
 
-    public void newPost(String url, String para) {
+    void newPost(String url, String para) {
         postQueue.add(new Tuple<>(url ,para));
     }
 
@@ -105,6 +105,9 @@ class FakeQueue extends Thread {
                 }
                 Tuple data = postQueue.poll();
                 if (data == null) {
+                    // 顺便把 cmdResultCache 发出去
+
+                    ApiClient.sendCmdResultCache();
                     sleep(500);
                     continue;
                 }
@@ -127,6 +130,8 @@ public class ApiClient {
 
     static Logger logger;
 
+    private static JSONObject cmdResultCache = null;
+
     // 底层不要直接调
     private static String executePost(String targetURL, String urlParameters) {
         /*
@@ -135,22 +140,50 @@ public class ApiClient {
         postThread.start();
         */
         FakeQueue.getInstance().newPost(targetURL, urlParameters);
-        return "Thread sent";
+        return "[executePost] Data Sent!";
     }
 
-    // 用这个, 最基础的给 coolq 发消息的
-    public static String sendMessage(JSONObject jsonData) {
+    // 上面那个轮询线程会把 cmdCache 发出去
+    static void sendCmdResultCache() {
+        if (cmdResultCache == null) {
+            return;
+        }
+        sendMessage(cmdResultCache, false);
+        cmdResultCache = null;
+    }
+
+    // 添加数据到 cmdResultCache 缓存, 避免多条发送
+    private static String addCmdResultCache(JSONObject jsonData) {
+        if (cmdResultCache == null) {
+            cmdResultCache = jsonData;
+        } else {
+            String cacheContent = cmdResultCache.getString("content");
+            String newContent = jsonData.getString("content");
+            cmdResultCache.put("content", cacheContent + "\n" + newContent);
+        }
+        return "[addCmdResultCache] Data Saved!";
+    }
+
+    private static String sendMessage(JSONObject jsonData, boolean useCache) {
         JSONObject json = new JSONObject();
         json.put("message_type", "sponge");
         json.put("post_type", "message");
         json.put("data", jsonData);
         String jsonString = json.toJSONString();
-        // logger.info("Send Sponge Data! " + jsonString);
-        return executePost(CQURL, jsonString);
+        if (useCache && jsonData.getString("action").equals("cmd_result")) {
+            return addCmdResultCache(jsonData);
+        } else {
+            return executePost(CQURL, jsonString);
+        }
+    }
+
+    // 用这个, 最基础的给 python server 发消息的
+    private static String sendMessage(JSONObject jsonData) {
+        return sendMessage(jsonData, true);
     }
 
     // 启动服务器
-    public static String sendServerStartMsg() {
+    static String sendServerStartMsg() {
         JSONObject json = new JSONObject();
         json.put("action", "server_start");
         json.put("time", timeNow());
@@ -158,7 +191,7 @@ public class ApiClient {
     }
 
     // 启动服务器
-    public static String sendServerReloadMsg() {
+    static String sendServerReloadMsg() {
         JSONObject json = new JSONObject();
         json.put("action", "server_reload");
         json.put("time", timeNow());
@@ -166,7 +199,7 @@ public class ApiClient {
     }
 
     // 发送服务器状态信息
-    public static String sendServerStatus(JSONObject jsonData) {
+    static String sendServerStatus(JSONObject jsonData) {
         JSONObject json = new JSONObject();
         json.put("action", "status");
         json.put("time", timeNow());
@@ -175,7 +208,7 @@ public class ApiClient {
     }
 
     // 有人说话
-    public static String sendChat(String playerName, String message) {
+    static String sendChat(String playerName, String message) {
         JSONObject json = new JSONObject();
         json.put("action", "chat");
         json.put("time", timeNow());
@@ -185,7 +218,7 @@ public class ApiClient {
     }
 
     // 有人死了
-    public static String sendDeath(String playerName, String killerName) {
+    static String sendDeath(String playerName, String killerName) {
         JSONObject json = new JSONObject();
         json.put("action", "death");
         json.put("time", timeNow());
@@ -197,7 +230,7 @@ public class ApiClient {
     }
 
     // 执行cmd命令返回结果
-    public static String sendCmdResult(String message) {
+    static String sendCmdResult(String message) {
         JSONObject json = new JSONObject();
         json.put("action", "cmd_result");
         json.put("time", timeNow());
@@ -205,7 +238,7 @@ public class ApiClient {
         return sendMessage(json);
     }
 
-    public static long timeNow() {
+    private static long timeNow() {
         Timestamp timestamp = new Timestamp(System.currentTimeMillis());
         return timestamp.getTime();
     }
