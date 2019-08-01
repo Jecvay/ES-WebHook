@@ -1,24 +1,22 @@
 package com.jecvay.ecosuites.eswebhook;
 
 import com.google.inject.Inject;
+import com.jecvay.ecosuites.eswebhook.event.DeathEvent;
+import com.jecvay.ecosuites.eswebhook.event.KillEvent;
+import com.jecvay.ecosuites.eswebhook.event.LoginEvent;
+import com.jecvay.ecosuites.eswebhook.event.MiningEvent;
 import org.slf4j.Logger;
 import org.spongepowered.api.Game;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.Player;
-import org.spongepowered.api.event.cause.entity.damage.source.EntityDamageSource;
-import org.spongepowered.api.event.entity.DestructEntityEvent;
+import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.filter.cause.First;
 import org.spongepowered.api.event.game.GameReloadEvent;
+import org.spongepowered.api.event.game.state.GameInitializationEvent;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
-import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.message.MessageChannelEvent;
 import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.scheduler.SpongeExecutorService;
-import org.spongepowered.api.text.Text;
-import org.spongepowered.api.text.channel.MessageChannel;
-
-import java.util.Optional;
 
 @Plugin(
         id = "es-webhook",
@@ -55,25 +53,19 @@ public class ESWebhook {
     }
 
     @Listener
+    public void onInit(GameInitializationEvent event) {
+        registerCustomListeners();
+    }
+
+    @Listener
     public void onChat(MessageChannelEvent.Chat e, @First Player p) {
         ApiClient.sendChat(p.getName(), e.getMessage().toPlain());
     }
 
-    @Listener
-    public void onPlayerDie(DestructEntityEvent.Death event) {
-        if (event.getTargetEntity() instanceof Player) {
-            Optional<EntityDamageSource> optDamageSource = event.getCause().first(EntityDamageSource.class);
-            Player player = (Player) event.getTargetEntity();
-            String playerName = player.getName();
-            String killerName = "";
-            if (optDamageSource.isPresent()) {
-                EntityDamageSource damageSource = optDamageSource.get();
-                Entity killer = damageSource.getSource();
-                if (killer instanceof Player) {
-                    killerName = ((Player) killer).getName();
-                }
-            }
-            ApiClient.sendDeath(playerName, killerName);
-        }
+    private void registerCustomListeners() {
+        game.getEventManager().registerListeners(this, new DeathEvent(this));
+        game.getEventManager().registerListeners(this, new KillEvent(this));
+        game.getEventManager().registerListeners(this, new LoginEvent(this));
+        game.getEventManager().registerListeners(this, new MiningEvent(this));
     }
 }

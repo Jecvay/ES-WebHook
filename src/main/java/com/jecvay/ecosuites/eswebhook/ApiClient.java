@@ -1,5 +1,11 @@
 package com.jecvay.ecosuites.eswebhook;
 
+import com.alibaba.fastjson.JSONObject;
+import org.slf4j.Logger;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.profile.GameProfile;
+import org.spongepowered.api.util.Tuple;
+
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.InputStream;
@@ -8,11 +14,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.sql.Timestamp;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-import com.alibaba.fastjson.JSONObject;
-import org.slf4j.Logger;
-import org.spongepowered.api.util.Tuple;
 
 class PostThread extends Thread {
     private String targetURL;
@@ -218,7 +221,7 @@ public class ApiClient {
     }
 
     // 有人死了
-    static String sendDeath(String playerName, String killerName) {
+    static public String sendDeath(String playerName, String killerName) {
         JSONObject json = new JSONObject();
         json.put("action", "death");
         json.put("time", timeNow());
@@ -230,11 +233,46 @@ public class ApiClient {
     }
 
     // 执行cmd命令返回结果
-    static String sendCmdResult(String message) {
+    static String sendCmdResult(JSONObject cqSource, String message) {
         JSONObject json = new JSONObject();
         json.put("action", "cmd_result");
         json.put("time", timeNow());
         json.put("content", message);
+        json.put("source", cqSource);
+        return sendMessage(json);
+    }
+
+    // 登录
+    static public String sendLoginMsg(GameProfile profile) {
+        UUID uuid = profile.getUniqueId();
+        String playerName = profile.getName().get();
+
+        JSONObject json = new JSONObject();
+        json.put("action", "login_game");
+        json.put("time", timeNow());
+        json.put("uuid", uuid);
+        json.put("player", playerName);
+        return sendMessage(json);
+    }
+
+    // 离线
+    static public String sendLeaveMsg(Player player) {
+        UUID uuid = player.getUniqueId();
+        String playerName = player.getName();
+
+        JSONObject json = new JSONObject();
+        json.put("action", "leave_game");
+        json.put("time", timeNow());
+        json.put("uuid", uuid);
+        json.put("player", playerName);
+        return sendMessage(json);
+    }
+
+    static public String sendCommonEvent(JSONObject commonData) {
+        JSONObject json = new JSONObject();
+        json.put("action", "common_event");
+        json.put("time", timeNow());
+        json.put("data", commonData);
         return sendMessage(json);
     }
 

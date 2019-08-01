@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 public class ApiServer {
     private static final String HOSTNAME = "0.0.0.0";
-    private static final int PORT = 51015;
+    private static final int PORT = 50205;
     private static final int BACKLOG = 1;
 
     private static final int NO_RESPONSE_LENGTH = -1;
@@ -97,17 +97,17 @@ public class ApiServer {
         });
     }
 
-    private void runCommand(String cmd) {
+    private void runCommand(JSONObject source, String cmd) {
         minecraftExecutor.submit(() -> {
            try {
-               Sponge.getCommandManager().process(CmdSource.getInstance(), cmd);
+               Sponge.getCommandManager().process(CmdSource.getInstance(source), cmd);
            } catch (Exception e) {
                e.printStackTrace();
            }
         });
     }
 
-    private void sendServerStatus() {
+    private void sendServerStatus(JSONObject cqSource) {
         minecraftExecutor.submit(() -> {
             JSONObject json = new JSONObject();
             Collection<Player> playerList = Sponge.getServer().getOnlinePlayers();
@@ -117,16 +117,25 @@ public class ApiServer {
             });
             json.put("players", playerNameList);
             json.put("online", playerNameList.size());
+            json.put("source", cqSource);
             ApiClient.sendServerStatus(json);
         });
     }
 
     private void onReceive(String receiveText) {
+        /*
+        * 来源: QQ私聊 / 群聊
+        *  - key: 与 "action" 同级的 "source"
+        *  - value: {"qq": xxxxx, "group": yyyy}
+        *  - 如果没有 "group" 就是私聊
+        *  - 本插件不进行处理, 直接 echo 回去即可
+        * */
 
         try {
 
             Map<String, Object> data = parseToMap(receiveText, String.class, Object.class);
             String action = data.getOrDefault("action", "unknown").toString();
+            JSONObject cqSource = (JSONObject) data.get("source");
             switch (action) {
                 case "chat": {        // QQ -> MC 聊天
                     String content = data.getOrDefault("content", "").toString();
@@ -144,11 +153,11 @@ public class ApiServer {
                         sendToConsole(String.format("[MC指令错误] %s", receiveText));
                         break;
                     }
-                    runCommand(content);
+                    runCommand(cqSource, content);
                     break;
                 }
                 case "status":        // 查询服务器信息
-                    sendServerStatus();
+                    sendServerStatus(cqSource);
                     break;
                 default:
                     sendToConsole(String.format("[Unknown Coolq Data] %s", receiveText));

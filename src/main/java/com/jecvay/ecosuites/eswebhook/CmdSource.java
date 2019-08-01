@@ -1,5 +1,6 @@
 package com.jecvay.ecosuites.eswebhook;
 
+import com.alibaba.fastjson.JSONObject;
 import javafx.beans.binding.When;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.CommandSource;
@@ -20,14 +21,18 @@ public class CmdSource implements CommandSource {
     static private CommandSource consoleSource = null;
     static private CmdSource cmdSource = null;
 
+    // 用来记录 CoolQ 是谁发过来要执行命令的
+    private JSONObject cqSource = null;
+
     private CmdSource() {
         consoleSource = Sponge.getServer().getConsole();
     }
 
-    static public CmdSource getInstance() {
+    static public CmdSource getInstance(JSONObject json) {
         if (cmdSource == null) {
             cmdSource = new CmdSource();
         }
+        cmdSource.cqSource = json;
         return cmdSource;
     }
 
@@ -99,7 +104,7 @@ public class CmdSource implements CommandSource {
     @Override
     public void sendMessage(Text message) {
         String plain = message.toPlain();
-        ApiClient.sendCmdResult(plain);
+        ApiClient.sendCmdResult(cqSource, plain);
     }
 
     @Override
