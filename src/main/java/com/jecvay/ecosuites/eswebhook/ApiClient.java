@@ -6,10 +6,7 @@ import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.profile.GameProfile;
 import org.spongepowered.api.util.Tuple;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.sql.Timestamp;
@@ -265,6 +262,39 @@ public class ApiClient {
         json.put("time", timeNow());
         json.put("uuid", uuid);
         json.put("player", playerName);
+        return sendMessage(json);
+    }
+
+    // Economy Result
+    static public String sendEconomyResult(JSONObject cqSource, String playerName, String result, Double balance, String context) {
+        JSONObject json = new JSONObject();
+        json.put("action", "economy_result");
+        json.put("time", timeNow());
+        json.put("source", cqSource);
+        json.put("player", playerName);
+        json.put("result", result);
+        json.put("context", context);
+        json.put("balance", balance);
+        return sendMessage(json);
+    }
+
+    // ApiServer Exception
+    static public String sendCommonException(Exception e) {
+        StringWriter errors = new StringWriter();
+        e.printStackTrace(new PrintWriter(errors));
+
+        JSONObject json = new JSONObject();
+        json.put("action", "apiserver_exception");
+        json.put("time", timeNow());
+        json.put("exception", errors.toString());
+        return sendMessage(json);
+    }
+
+    static public String sendCommonException(String msg) {
+        JSONObject json = new JSONObject();
+        json.put("action", "apiserver_exception");
+        json.put("time", timeNow());
+        json.put("exception", msg);
         return sendMessage(json);
     }
 

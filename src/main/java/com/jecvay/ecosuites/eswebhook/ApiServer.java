@@ -8,6 +8,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.scheduler.SpongeExecutorService;
+import org.spongepowered.api.service.economy.transaction.ResultType;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.channel.MessageChannel;
 
@@ -15,17 +16,15 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
-
+// Singleton
 public class ApiServer {
     private static final String HOSTNAME = "0.0.0.0";
     private static final int PORT = 50205;
     private static final int BACKLOG = 1;
+    private static final String[] ALLOW_ECO_OP = {"add", "query"};
 
     private static final int NO_RESPONSE_LENGTH = -1;
 
@@ -34,7 +33,10 @@ public class ApiServer {
 
     static private ApiServer server = null;
 
-    private ApiServer(SpongeExecutorService minecraftExecutor) {
+    private ESWebhook plugin = null;
+
+    private ApiServer(ESWebhook plugin, SpongeExecutorService minecraftExecutor) {
+        this.plugin = plugin;
         this.minecraftExecutor = minecraftExecutor;
         try {
             final HttpServer server = HttpServer.create(new InetSocketAddress(HOSTNAME, PORT), BACKLOG);
@@ -46,12 +48,20 @@ public class ApiServer {
                         case "POST":
                             BufferedReader in = new BufferedReader(new InputStreamReader(he.getRequestBody()));
                             String responseBody = in.lines().collect(Collectors.joining());
+
+                            // coolq 发过来的 json 数据处理就在这里哦, responseBody 是一个文本哦
                             onReceive(responseBody);
+
                             headers.set("Content-Type", "application/json; charset=UTF-8");
                             final byte[] rawResponseBody = responseBody.getBytes(StandardCharsets.UTF_8);
                             he.sendResponseHeaders(200, rawResponseBody.length);
                             he.getResponseBody().write(rawResponseBody);
                             break;
+                        case "GET":
+                            final byte[] simpleBody = "<h1>OK</h1>".getBytes(StandardCharsets.UTF_8);
+                            headers.set("Content-Type", "text/html; charset=UTF-8");
+                            he.sendResponseHeaders(200, simpleBody.length);
+                            he.getResponseBody().write(simpleBody);
                         default:
                             headers.set("Allow", "GET,POST");
                             he.sendResponseHeaders(405, -1);
@@ -63,13 +73,22 @@ public class ApiServer {
             });
             server.start();
         } catch (Exception e) {
-            e.printStackTrace();
+            ApiClient.sendCommonException(e);
         }
     }
 
-    public static <K, V> Map<K, V> parseToMap(String json,
-                                              Class<K> keyType,
-                                              Class<V> valueType) {
+    static public ApiServer getServer(ESWebhook plugin, SpongeExecutorService minecraftExecutor) {
+        if (server == null) {
+            server = new ApiServer(plugin, minecraftExecutor);
+        } else {
+            // server = new ApiServer();
+        }
+        return server;
+    }
+
+    private static <K, V> Map<K, V> parseToMap(String json,
+                                               Class<K> keyType,
+                                               Class<V> valueType) {
         return JSON.parseObject(json,
                 new TypeReference<Map<K, V>>(keyType, valueType) {
                 });
@@ -81,7 +100,7 @@ public class ApiServer {
                 Sponge.getServer().setBroadcastChannel(MessageChannel.TO_CONSOLE);
                 Sponge.getServer().getBroadcastChannel().send(Text.of(text));
             } catch (Exception e) {
-                e.printStackTrace();
+                ApiClient.sendCommonException(e);
             }
         });
     }
@@ -92,7 +111,7 @@ public class ApiServer {
                 Sponge.getServer().setBroadcastChannel(MessageChannel.TO_ALL);
                 Sponge.getServer().getBroadcastChannel().send(Text.of(text));
             } catch (Exception e) {
-                e.printStackTrace();
+                ApiClient.sendCommonException(e);
             }
         });
     }
@@ -102,7 +121,7 @@ public class ApiServer {
            try {
                Sponge.getCommandManager().process(CmdSource.getInstance(source), cmd);
            } catch (Exception e) {
-               e.printStackTrace();
+               ApiClient.sendCommonException(e);
            }
         });
     }
@@ -122,11 +141,42 @@ public class ApiServer {
         });
     }
 
+    private void handleEconomy(JSONObject cqSource, Map<String, Object> data) {
+        String playerName = data.get("player").toString();
+        String operation = data.get("operation").toString();
+
+        String context = data.get("context").toString();
+        if (playerName.length() == 0) {
+            return;
+        } else if (!Arrays.asList(ALLOW_ECO_OP).contains(operation)) {
+            return;
+        }
+
+        Player player = Sponge.getServer().getPlayer(playerName).orElse(null);
+        if (player == null) {
+            ApiClient.sendCommonException("handleEconomy cannot find " + playerName);
+            return;
+        }
+
+        ResultType resultType = ResultType.FAILED;
+        Double balance = plugin.getEconomyManager().getBalance(player);
+        if (operation.equals("add")) {
+            Integer amount = (Integer) data.get("amount");
+            if (amount != null) {
+                resultType = plugin.getEconomyManager().easyAddMoney(player, amount.doubleValue());
+            }
+        } else if (operation.equals("query")) {
+            resultType = ResultType.SUCCESS;
+        }
+
+        ApiClient.sendEconomyResult(cqSource, playerName, resultType.name(), balance, context);
+    }
+
     private void onReceive(String receiveText) {
         /*
-        * 来源: QQ私聊 / 群聊
+        * 来源 [cqSource]: QQ私聊 / 群聊
         *  - key: 与 "action" 同级的 "source"
-        *  - value: {"qq": xxxxx, "group": yyyy}
+        *  - value: {"qq": xxxxx, "group": yyyyy}
         *  - 如果没有 "group" 就是私聊
         *  - 本插件不进行处理, 直接 echo 回去即可
         * */
@@ -159,90 +209,18 @@ public class ApiServer {
                 case "status":        // 查询服务器信息
                     sendServerStatus(cqSource);
                     break;
+                case "economy":
+                    handleEconomy(cqSource, data);
+                    break;
                 default:
                     sendToConsole(String.format("[Unknown Coolq Data] %s", receiveText));
                     break;
             }
 
         } catch (Exception e) {
-            e.printStackTrace();
+            ApiClient.sendCommonException(e);
         }
     }
 
-    static public ApiServer getServer(SpongeExecutorService minecraftExecutor) {
-        if (server == null) {
-            server = new ApiServer(minecraftExecutor);
-        } else {
-            // server = new ApiServer();
-        }
-        return server;
-    }
-}
-
-/*
-public class ApiServer {
-
-    final static int port = 51015;
-    static private ApiServer server = null;
-
-    private ApiServer() {
-        Thread serverThread = new ListenerThread(port);
-        serverThread.setDaemon(true);
-        serverThread.start();
-    }
-
-    static public ApiServer getServer() {
-        if (server == null) {
-            server = new ApiServer();
-        } else {
-            // server = new ApiServer();
-        }
-        return server;
-    }
 
 }
-
-class ListenerThread extends Thread {
-
-    private int port;
-
-    public ListenerThread(int port) {
-        this.port = port;
-    }
-
-    public void run() {
-        try {
-            System.out.println("listener server start");
-            ServerSocket serverSocket = new ServerSocket(port);
-            while (true) {
-                Socket client = serverSocket.accept();
-                BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
-                PrintWriter out = new PrintWriter(client.getOutputStream());
-
-                out.print("HTTP/1.1 200 \r\n"); // Version & status code
-                out.print("Content-Type: application/json; utf-8\r\n"); // The type of data
-                out.print("Connection: close\r\n"); // Will close stream
-                out.print("\r\n"); // End of headers
-
-                String line;
-                StringBuilder sb = new StringBuilder();
-                while ((line = in.readLine()) != null) {
-                    if (line.length() == 0) {
-                        break;
-                    }
-                    sb.append(line);
-                    sb.append("\r\n");
-                    out.print(line + "\r\n");
-                }
-
-                System.out.println("[Receive]>>> " + sb.toString() + "\n\n");
-                out.close();
-                in.close();
-                client.close();
-            }
-        } catch (Exception e) {
-            System.err.println(e.toString());
-        }
-    }
-}
-*/
