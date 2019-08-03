@@ -2,4 +2,8 @@
 .idea/
 build/
 *.swp
+.classpath
+.project
+.settings/
+bin/ 
 

@@ -62,7 +62,9 @@ class PostThread extends Thread {
             if (e.getMessage().toLowerCase().contains("refused")) {
                 // do nothing
             } else {
-                e.printStackTrace();
+                if (ApiClient.logger != null) {
+                    ApiClient.logger.error("python server sent broken response");
+                }
             }
             // return null;
         } finally {
