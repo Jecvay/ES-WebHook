@@ -201,11 +201,12 @@ public class ApiClient {
     }
 
     // 发送服务器状态信息
-    static String sendServerStatus(JSONObject jsonData) {
+    static String sendServerStatus(JSONObject source, JSONObject jsonData) {
         JSONObject json = new JSONObject();
         json.put("action", "status");
         json.put("time", timeNow());
         json.put("status", jsonData);
+        json.put("source", source);
         return sendMessage(json);
     }
 
@@ -243,26 +244,26 @@ public class ApiClient {
 
     // 登录
     static public String sendLoginMsg(GameProfile profile) {
-        UUID uuid = profile.getUniqueId();
+        // UUID uuid = profile.getUniqueId();
         String playerName = profile.getName().get();
 
         JSONObject json = new JSONObject();
         json.put("action", "login_game");
         json.put("time", timeNow());
-        json.put("uuid", uuid);
+        // json.put("uuid", uuid);
         json.put("player", playerName);
         return sendMessage(json);
     }
 
     // 离线
     static public String sendLeaveMsg(Player player) {
-        UUID uuid = player.getUniqueId();
+        // UUID uuid = player.getUniqueId();
         String playerName = player.getName();
 
         JSONObject json = new JSONObject();
         json.put("action", "leave_game");
         json.put("time", timeNow());
-        json.put("uuid", uuid);
+        // json.put("uuid", uuid);
         json.put("player", playerName);
         return sendMessage(json);
     }
@@ -304,7 +305,7 @@ public class ApiClient {
         JSONObject json = new JSONObject();
         json.put("action", "common_event");
         json.put("time", timeNow());
-        json.put("data", commonData);
+        json.putAll(commonData.getInnerMap());
         return sendMessage(json);
     }
 

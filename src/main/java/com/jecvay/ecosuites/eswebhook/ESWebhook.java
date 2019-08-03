@@ -73,7 +73,7 @@ public class ESWebhook {
     private void registerCustomListeners() {
         economyManager = new EconomyManager(this);
         game.getEventManager().registerListeners(this, new EconomyListener(this, economyManager));
-        game.getEventManager().registerListeners(this, new DeathEvent(this));
+        // game.getEventManager().registerListeners(this, new DeathEvent(this));
         game.getEventManager().registerListeners(this, new KillEvent(this));
         game.getEventManager().registerListeners(this, new LoginEvent(this));
         game.getEventManager().registerListeners(this, new MiningEvent(this));

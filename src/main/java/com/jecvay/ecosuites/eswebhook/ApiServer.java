@@ -136,8 +136,7 @@ public class ApiServer {
             });
             json.put("players", playerNameList);
             json.put("online", playerNameList.size());
-            json.put("source", cqSource);
-            ApiClient.sendServerStatus(json);
+            ApiClient.sendServerStatus(cqSource, json);
         });
     }
 

@@ -30,6 +30,7 @@ public class MiningEvent {
         }
 
         List<String> blockList = new ArrayList<>();
+        List<String> presentList = new ArrayList<>();
 
         // 石头列表计算
         event.getTransactions().forEach(trans->{
@@ -40,20 +41,20 @@ public class MiningEvent {
                 return;
             }
 
-            // 自己放下的矿不算
             if (creator.isPresent()) {
-                return;
+                presentList.add(blockId);
+            } else {
+                blockList.add(blockId);
             }
 
-            blockList.add(blockId);
         });
 
         // 通用事件发送: kill
         JSONObject json = new JSONObject();
         json.put("event", "break_block");
-        json.put("uuid", player.getUniqueId());
         json.put("player", player.getName());
         json.put("block_list", blockList);
+        json.put("present_list", presentList);
         ApiClient.sendCommonEvent(json);
     }
 }

@@ -3,11 +3,18 @@ package com.jecvay.ecosuites.eswebhook.event;
 import com.alibaba.fastjson.JSONObject;
 import com.jecvay.ecosuites.eswebhook.ApiClient;
 import com.jecvay.ecosuites.eswebhook.ESWebhook;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.spongepowered.api.entity.Entity;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.entity.living.player.gamemode.GameModes;
+import org.spongepowered.api.entity.projectile.Projectile;
+import org.spongepowered.api.entity.projectile.arrow.Arrow;
+import org.spongepowered.api.entity.projectile.source.ProjectileSource;
 import org.spongepowered.api.event.Listener;
+import org.spongepowered.api.event.cause.entity.damage.source.EntityDamageSource;
 import org.spongepowered.api.event.entity.DestructEntityEvent;
+
+import java.util.Optional;
 
 public class KillEvent {
     private ESWebhook plugin;
@@ -17,34 +24,44 @@ public class KillEvent {
 
     @Listener
     public void onKillEntity(DestructEntityEvent.Death event) {
-        event.getCause().first(Player.class).ifPresent(player -> {
-            Entity entity = event.getTargetEntity();
-            String entityId = entity.getType().getId();
-            boolean isSuicide = false;
 
-            // 创造模式不发送
-            if (player.gameMode().get() == GameModes.CREATIVE) {
-                return;
-            }
+        event.getCause().first(Entity.class).ifPresent(target -> {
+            event.getCause().last(Entity.class).ifPresent(killer -> {
+                boolean isPresent = false;
 
-            // 杀自己养的不发送
-            if (entity.getCreator().isPresent()) {
-                return;
-            }
+                if (killer instanceof Player || target instanceof Player) {
 
-            // 自杀
-            if (entity instanceof Player && entity.equals(player)) {
-                isSuicide = true;
-            }
+                    // 杀人养的
+                    isPresent = target.getCreator().isPresent();
 
-            // 通用事件发送: kill
-            JSONObject json = new JSONObject();
-            json.put("event", "kill");
-            json.put("uuid", player.getUniqueId());
-            json.put("player", player.getName());
-            json.put("entity_id", entityId);
-            json.put("is_suicide", isSuicide);
-            ApiClient.sendCommonEvent(json);
+                    // 抛射物 (例如弓箭) 发射者
+                    if (killer instanceof Projectile) {
+                        Projectile arrow = (Projectile) killer;
+                        killer = (Entity) arrow.getShooter();
+                    }
+
+                    // 通用事件发送: kill
+                    JSONObject json = new JSONObject();
+                    json.put("event", "kill");
+                    json.put("is_present", isPresent);
+
+                    if (killer instanceof Player) {
+                        Player player = (Player) killer;
+                        json.put("killer", "player:" + player.getName());
+                    } else {
+                        json.put("killer", killer.getType().getId());
+                    }
+
+                    if (target instanceof Player) {
+                        Player player = (Player) target;
+                        json.put("target", "player:" + player.getName());
+                    } else {
+                        json.put("target", target.getType().getId());
+                    }
+                    ApiClient.sendCommonEvent(json);
+                }
+            });
         });
+
     }
 }
